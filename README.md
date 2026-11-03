@@ -61,6 +61,7 @@ The `OPA/` directory is completely standalone and contains all necessary files f
 
 ```
 d:\MTP\Genomic_privacy_audit\OPA\
+├── requirements.txt      # Project dependencies (torch, flwr, datasets, scikit-learn, etc.)
 ├── __init__.py           # Package exports for OPA components
 ├── crypto.py            # LWR PRG, Shamir Secret Sharing, Fixed-Point Quantization
 ├── opa_flwr.py          # OPAClient (NumPyClient) & OPAFedAvg (Flower Strategy)
@@ -68,6 +69,7 @@ d:\MTP\Genomic_privacy_audit\OPA\
 ├── model.py             # SimpleDNALM: 4 Causal Transformer blocks (~12.6M params)
 ├── attack.py            # Three-Vector Attack Suite: Extraction, Perplexity, LiRA MIA
 ├── main.py              # 10-Client Flower OPA orchestration & audit reporting
+├── opa_simulation.log   # Automated terminal execution log file
 └── README.md            # Comprehensive documentation & foundation model guide
 ```
 
@@ -222,22 +224,93 @@ Even when client updates are cryptographically protected in transit by OPA, the 
 
 ---
 
-## 8. Execution Guide & CLI Commands
+## 8. Experiment Replication Guide & Execution
+
+Follow these step-by-step instructions to replicate the entire One-Shot Private Aggregation (OPA) genomic privacy audit experiment from scratch and capture all terminal output.
+
+### Step 1: Environment Setup & Install Dependencies
+
+Create and activate a virtual environment, then install dependencies from `requirements.txt`:
+
+```powershell
+# Navigate to the OPA directory
+cd d:\MTP\Genomic_privacy_audit\OPA
+
+# Optional: Create and activate virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# Install requirements
+pip install -r requirements.txt
+```
+
+*(On Linux / macOS, use `source venv/bin/activate`)*
+
+### Step 2: Hugging Face Authentication Setup (Token Configuration)
+
+This benchmark fetches the `prom_300_all` subset of the Genomic Understanding Evaluation (GUE) benchmark via Hugging Face `datasets`. Some mirrors require authentication:
+
+```powershell
+# PowerShell (Windows)
+$env:HF_TOKEN = "your_hf_token_here"
+
+# Bash / Zsh (Linux / macOS)
+export HF_TOKEN="your_hf_token_here"
+```
+
+> [!TIP]
+> A valid Hugging Face token is provided in [`d:\MTP\hugging_face_token.txt`](file:///d:/MTP/hugging_face_token.txt). You can copy the token from that file or source it directly. `dataset.py` also automatically checks for `hugging_face_token.txt` at the repository root if `$env:HF_TOKEN` is unset.
+
+### Step 3: Run the Experiment & Write Terminal Logs to File
 
 > [!IMPORTANT]
 > **Hyperparameter Optimization for Demonstrable Overfitting**:
 > The defaults are configured with `--rounds 50` and `--local-epochs 5` (at `--batch-size 16`). This ensures the model performs sufficient optimization steps on real biological promoter sequences to converge and trigger measurable memorization and canary extraction.
 
-### Direct Script Invocation
+The simulation automatically records all console output into a persistent log file (`opa_simulation.log`) using an integrated real-time `TeeLogger`.
+
+#### Option A: Built-in Automatic Logging (Default)
+Simply run the script. Output is displayed in the terminal and simultaneously saved to `opa_simulation.log`:
+
 ```powershell
 cd d:\MTP\Genomic_privacy_audit\OPA
-python main.py --rounds 50 --clients 10 --local-epochs 5 --batch-size 16 --lr 0.0005 --lam 128 --t 3 --r 6
+python main.py
 ```
 
-### Module Invocation from Project Root
+#### Option B: Custom Log File Path via CLI
+To specify a custom log file destination:
+
+```powershell
+python main.py --log-file "custom_opa_run.log" --rounds 50 --clients 10 --local-epochs 5 --batch-size 16
+```
+
+#### Option C: Shell-Level Redirection & Piping
+You can also pipe the execution output using standard terminal utilities:
+
+```powershell
+# Windows PowerShell (Live terminal view + file output)
+python main.py 2>&1 | Tee-Object -FilePath "opa_simulation.log"
+
+# Linux / macOS (Live terminal view + file output)
+python main.py 2>&1 | tee opa_simulation.log
+```
+
+#### Option D: Module Invocation from Project Root
 ```powershell
 cd d:\MTP
 python -m Genomic_privacy_audit.OPA.main --rounds 50 --clients 10 --local-epochs 5 --batch-size 16
+```
+
+### Step 4: Reading Terminal Logs Later
+
+To inspect the saved execution log at any time:
+
+```powershell
+# Windows PowerShell
+Get-Content opa_simulation.log -Tail 60
+
+# Linux / macOS
+tail -n 60 opa_simulation.log
 ```
 
 ### Command-Line Arguments Reference
@@ -254,6 +327,7 @@ python -m Genomic_privacy_audit.OPA.main --rounds 50 --clients 10 --local-epochs
 | `--r` | `int` | `6` | Shamir's Secret Sharing reconstruction threshold ($r$) |
 | `--scale` | `float` | `10000.0` | Fixed-point quantization scaling factor |
 | `--beam-width` | `int` | `10` | Beam width for Vector 1 Sequence Extraction |
+| `--log-file` | `str` | `opa_simulation.log` | Path to automatically write all terminal output to file |
 | `--seed` | `int` | `42` | Deterministic random seed for reproducibility |
 | `--device` | `str` | `cuda`/`cpu`| Compute device (`cpu` or `cuda`) |
 

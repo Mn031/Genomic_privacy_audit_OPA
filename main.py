@@ -44,6 +44,30 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+
+class TeeLogger:
+    """Duplicates stdout and stderr streams to both the terminal and a log file."""
+
+    def __init__(self, filename: str, stream) -> None:
+        self.terminal = stream
+        self.log_file = open(filename, "a", encoding="utf-8")
+
+    def write(self, message: str) -> None:
+        self.terminal.write(message)
+        self.log_file.write(message)
+        self.log_file.flush()
+
+    def flush(self) -> None:
+        self.terminal.flush()
+        self.log_file.flush()
+
+    def isatty(self) -> bool:
+        return getattr(self.terminal, "isatty", lambda: False)()
+
+    def close(self) -> None:
+        if not self.log_file.closed:
+            self.log_file.close()
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -140,11 +164,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--beam-width", type=int, default=10, help="Beam width for Vector 1 extraction (default: 10)")
     parser.add_argument("--seed", type=int, default=42, help="Deterministic random seed (default: 42)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Compute device")
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default="opa_simulation.log",
+        help="Path to write terminal logs to a file (default: opa_simulation.log)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+
+    # Initialize terminal logging to file if configured
+    if args.log_file:
+        log_path = os.path.abspath(args.log_file)
+        open(log_path, "w", encoding="utf-8").close()  # Clear prior run
+        sys.stdout = TeeLogger(log_path, sys.stdout)
+        sys.stderr = TeeLogger(log_path, sys.stderr)
+
     device = torch.device(args.device)
 
     print("=" * 80)
@@ -152,6 +190,8 @@ def main() -> None:
     print(" Cryptographic Transport: LWR Seed-Homomorphic PRG & Shamir Secret Sharing")
     print(" Benchmark Dataset: Real Biological DNA (GUE prom_300_all)")
     print(" Target Configuration: Client 9 Canary Injection vs. Clients 0-8 Clean Baselines")
+    if args.log_file:
+        print(f" Terminal Logging: Active -> {os.path.abspath(args.log_file)}")
     print("=" * 80)
 
     # 1. Deterministic Seeds
