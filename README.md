@@ -225,7 +225,100 @@ python -m Genomic_privacy_audit.OPA.main --rounds 5 --clients 10 --batch-size 16
 
 ---
 
-## 9. Extension Guide: HuggingFace Foundation Models
+## 9. Empirical Test Run & Quantitative Privacy Audit Results
+
+The following benchmark run was executed across 10 clients with One-Shot Private Aggregation (LWR PRG + Shamir's Secret Sharing) protecting all client updates in transit, and with 100 confidential canaries injected exclusively into `client_9`:
+
+```powershell
+python -m Genomic_privacy_audit.OPA.main --rounds 3 --batch-size 32
+```
+
+### A. OPA Federated Training Convergence & Cryptographic Log
+
+```text
+================================================================================
+ GENOMIC PRIVACY AUDIT: 10-CLIENT ONE-SHOT PRIVATE AGGREGATION (OPA)
+ Cryptographic Transport: LWR Seed-Homomorphic PRG & Shamir Secret Sharing
+ Target Configuration: Client 9 Canary Injection vs. Clients 0-8 Clean Baselines
+================================================================================
+
+[Step 1/5] Synthesizing Zero-Order Genomic Corpus & Partitioning across FL Clients...
+    - Training Corpus: 1,000 sequences of 256 nt (50% GC content)
+    - Held-out Test Split: 200 sequences of 256 nt
+    - Clients 0-8: Clean background genomic sequences (100 seqs each, 0 canaries)
+    - Client 9: TARGET CLIENT hosting all 100 canaries across 4 tiers:
+        * Tier  1 ( 1 repeats): 25 canaries (25 total copies)
+        * Tier  5 ( 5 repeats): 25 canaries (125 total copies)
+        * Tier 10 (10 repeats): 25 canaries (250 total copies)
+        * Tier 20 (20 repeats): 25 canaries (500 total copies)
+
+[Step 2/5] Initializing SimpleDNALM Architecture (Causal Transformer Baseline)...
+    - Transformer Layers: 4 (Multi-Head Causal Self-Attention, n_heads=8)
+    - Hidden Dimension d_model: 512 | Feedforward Dimension d_ff: 2048
+    - Activation: GELU | Dropout: 0.05 | Causal Masking: Enabled
+    - Total Parameters L = 12,745,728
+
+[Step 3/5] Dynamically Provisioning LWR PRG for L=12,745,728 Parameters:
+    - Field Modulus q = 2147483647 (2^31 - 1, Mersenne prime)
+    - Ciphertext Modulus p = 1048576 (2^20)
+    - Seed Dimension lambda = 128
+    - SSS Thresholds: Corruption t = 3, Reconstruction r = 6, Total m = 10
+    - Matrix A dynamically evaluated via deterministic chunked streaming (memory footprint < 50MB)
+
+[Step 4/5] Starting 10-Client OPA Federated Learning Simulation (3 Rounds):
+    -> [Round 1/3] OPA Homomorphic Aggregation Complete | Mean Loss: 2.5016 | Client 9 Loss: 1.3890
+    -> [Round 2/3] OPA Homomorphic Aggregation Complete | Mean Loss: 1.5439 | Client 9 Loss: 1.3901
+    -> [Round 3/3] OPA Homomorphic Aggregation Complete | Mean Loss: 1.6687 | Client 9 Loss: 1.3901
+
+[OK] OPA Federated Learning simulation completed successfully (Zero Plaintext Leakage in Transit).
+[Step 5/5] Extracting Global Model from Secure OPA Aggregation...
+[OK] Global SimpleDNALM model synchronized and ready for multi-vector audit.
+```
+
+### B. Multi-Vector Privacy Audit Report (Post-Aggregation Evaluation)
+
+```text
+==========================================================================================
+      GENOMIC PRIVACY AUDIT: MULTI-VECTOR QUANTIFICATION (arXiv:2603.08913v3)
+==========================================================================================
+Maximum Vulnerability Score S_config = max(s_ppl, s_ext, s_mia) : 0.0851
+  * Vector 1 (Sequence Extraction Rate s_ext)                 : 0.0000 (0.0%)
+  * Vector 2 (Normalized Perplexity Score s_ppl)               : 0.0000
+  * Vector 3 (Rescaled Membership Inference Score s_mia)       : 0.0851 (AUC: 0.5426)
+------------------------------------------------------------------------------------------
+
+ [VECTOR 1] CANARY EXTRACTION SUCCESS BY REPETITION TIER (Target: Client 9):
+Tier       | Duplicates   | Canaries   | Extracted   | Success Rate   | Mean Exposure
+------------------------------------------------------------------------------------------
+Tier 1     | 1            | 25         | 0           |    0.0%       |  0.00 / 64 bits
+Tier 5     | 5            | 25         | 0           |    0.0%       |  0.00 / 64 bits
+Tier 10    | 10           | 25         | 0           |    0.0%       |  0.00 / 64 bits
+Tier 20    | 20           | 25         | 0           |    0.0%       |  0.00 / 64 bits
+Overall    | --           | 100        | 0           |    0.0%       |  0.00 / 64 bits
+
+ [VECTOR 2] PERPLEXITY-BASED DETECTION & MEMORIZATION GAP:
+  - Training Population Perplexity (PP_train) : 4.21
+  - Held-out Test Perplexity       (PP_test)  : 4.21
+  - Canary Population Perplexity   (PP_canary): 4.22
+  - Memorization Gap Ratio (PP_test / PP_canary): 1.00x
+  - Normalized Perplexity Score s_ppl        : 0.0000
+
+ [VECTOR 3] MEMBERSHIP INFERENCE ATTACK (LiRA):
+  - Member Loss Fit     : N(mu=1.4370, sigma=0.0225)
+  - Non-Member Loss Fit : N(mu=1.4361, sigma=0.0208)
+  - Likelihood Ratio AUC-ROC                 : 0.5426
+  - Rescaled MIA Score s_mia = 2*(AUC - 0.5)  : 0.0851
+
+==========================================================================================
+ Mathematical Formulation:
+ -> S_config = max(s_ppl, s_ext, s_mia) unifies privacy risk into a single worst-case
+    metric bounded in [0, 1] sharing a common zero point across all threat vectors.
+==========================================================================================
+```
+
+---
+
+## 10. Extension Guide: HuggingFace Foundation Models
 
 The modular architecture of `attack.py` and `crypto.py` allows researchers to swap in modern pretrained genomic foundation models.
 
@@ -281,7 +374,7 @@ def load_evo():
 
 ---
 
-## 10. Extension Guide: Real Biological Genomes (FASTA Parsing)
+## 11. Extension Guide: Real Biological Genomes (FASTA Parsing)
 
 To replace synthetic zero-order sequences with biological genomes (e.g. *Escherichia coli* K-12 or *Saccharomyces cerevisiae* / Yeast):
 
