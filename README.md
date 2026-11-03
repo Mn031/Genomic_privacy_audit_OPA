@@ -64,7 +64,7 @@ d:\MTP\Genomic_privacy_audit\OPA\
 ├── __init__.py           # Package exports for OPA components
 ├── crypto.py            # LWR PRG, Shamir Secret Sharing, Fixed-Point Quantization
 ├── opa_flwr.py          # OPAClient (NumPyClient) & OPAFedAvg (Flower Strategy)
-├── dataset.py           # Zero-order generation, DNATokenizer, client_9 canary injection
+├── dataset.py           # Real GUE prom_300_all loader, DNATokenizer, client_9 canary injection
 ├── model.py             # SimpleDNALM: 4 Causal Transformer blocks (~12.6M params)
 ├── attack.py            # Three-Vector Attack Suite: Extraction, Perplexity, LiRA MIA
 ├── main.py              # 10-Client Flower OPA orchestration & audit reporting
@@ -154,21 +154,51 @@ Conforms strictly to the causal transformer baseline from arXiv:2603.08913v3:
 
 ---
 
-## 6. Genomic Dataset & Canary Isolation in Client 9 (`dataset.py`)
+## 6. Real Biological Dataset (GUE Benchmark) & Canary Injection (`dataset.py`)
 
-- **Synthetic Zero-Order Baseline**: 1,000 baseline sequences (256 nt each) partitioned across 10 clients (100 sequences/client) and 200 held-out test sequences.
-- **GC Content**: Balanced 50% GC content ($P(A)=P(T)=P(C)=P(G)=0.25$).
-- **Discrete Genomic Tokenizer**: 8 tokens: `<PAD>` (0), `<UNK>` (1), `<BOS>` (2), `<EOS>` (3), `A` (4), `C` (5), `G` (6), `T` (7).
-- **Canary Stratification**: Exactly 100 distinct 64-nt canaries across 4 repetition tiers:
-  - **Tier 1** (1 copy): 25 canaries ($25 \times 1 = 25$ copies)
-  - **Tier 5** (5 copies): 25 canaries ($25 \times 5 = 125$ copies)
-  - **Tier 10** (10 copies): 25 canaries ($25 \times 10 = 250$ copies)
-  - **Tier 20** (20 copies): 25 canaries ($25 \times 20 = 500$ copies)
-  - **Total Copies**: 900 canary instances.
-- **Strict Client 9 Isolation**:
-  - Injected uniformly at random **ONLY into `client_9`'s training split**.
-  - `client_0` through `client_8` hold 100% clean baseline sequences ($0/100$ canary hits).
-  - The held-out test split contains zero canaries ($0/100$ canary hits).
+### A. Real Biological Sequences (GUE `prom_300_all` Subset)
+To evaluate realistic memorization dynamics in natural DNA containing biological motifs (promoters, transcription factor binding sites, TATA boxes, and CpG islands), the synthetic generator has been replaced with the **Genomic Understanding Evaluation (GUE)** benchmark (`prom_300_all` subset) via Hugging Face `datasets`:
+- **Source**: Eukaryotic/human promoter sequences standardized to ~300 base pairs.
+- **Sequence Processing**: Each sequence is standardized to exactly $L = 256$ nucleotides via center-cropping or padding (`process_sequence_to_length`).
+- **Corpus Sizing**: 1,000 baseline biological training sequences partitioned across 10 clients (100 sequences/client) and 200 held-out biological test sequences.
+- **Discrete Genomic Tokenizer (`DNATokenizer`)**: 8-token character-level vocabulary:
+  - `0`: `<PAD>` (Padding token, ignored in cross-entropy loss)
+  - `1`: `<UNK>` (Unknown nucleotide / 'N')
+  - `2`: `<BOS>` (Beginning of sequence)
+  - `3`: `<EOS>` (End of sequence)
+  - `4`: `A` (Adenine)
+  - `5`: `C` (Cytosine)
+  - `6`: `G` (Guanine)
+  - `7`: `T` (Thymine)
+
+### B. Hugging Face Authentication Setup
+Some Hugging Face genomic mirrors and checkpoints require user authentication. `dataset.py` includes automatic token discovery:
+1. **Environment Variable**: Checks `HF_TOKEN`.
+2. **File Fallback**: Reads `hugging_face_token.txt` located in the project root.
+
+To set your token in the terminal before running:
+```powershell
+# PowerShell (Windows)
+$env:HF_TOKEN = "your_hf_token_here"
+
+# Bash / Zsh (Linux / macOS)
+export HF_TOKEN="your_hf_token_here"
+```
+
+### C. Repetition Tiers & Client 9 Canary Isolation
+- **Canary Generation**: Exactly 100 distinct synthetic 64-nucleotide canaries sampled with $50\%$ GC content.
+- **Stratified Repetition Tiers**: The 100 canaries are partitioned into four distinct frequency tiers:
+  - **Tier 1** (1 duplicate copy): 25 canaries ($25 \times 1 = 25$ copies)
+  - **Tier 5** (5 duplicate copies): 25 canaries ($25 \times 5 = 125$ copies)
+  - **Tier 10** (10 duplicate copies): 25 canaries ($25 \times 10 = 250$ copies)
+  - **Tier 20** (20 duplicate copies): 25 canaries ($25 \times 20 = 500$ copies)
+  - **Total Copies**: $25 + 125 + 250 + 500 = 900$ canary instances.
+- **Client 9 Exclusive Host Partition**:
+  - All 900 canary copies are injected **strictly into `client_9`'s training split**.
+  - Each canary copy is embedded into a real 256-nt GUE host sequence (at a uniformly random offset between 0 and 192) without overwriting or collisions.
+  - `client_0` through `client_8` receive **100% clean biological GUE baseline sequences** ($0/100$ canary hits).
+  - The held-out test split receives **zero canaries** ($0/100$ canary hits).
+- **Causal LM Target Construction**: For sequence token IDs $[t_0, t_1, \dots, t_{L-1}]$, input is $x = [t_0, \dots, t_{L-2}]$ and target is $y = [t_1, \dots, t_{L-1}]$.
 
 ---
 
@@ -194,25 +224,29 @@ Even when client updates are cryptographically protected in transit by OPA, the 
 
 ## 8. Execution Guide & CLI Commands
 
+> [!IMPORTANT]
+> **Hyperparameter Optimization for Demonstrable Overfitting**:
+> The defaults are configured with `--rounds 50` and `--local-epochs 5` (at `--batch-size 16`). This ensures the model performs sufficient optimization steps on real biological promoter sequences to converge and trigger measurable memorization and canary extraction.
+
 ### Direct Script Invocation
 ```powershell
 cd d:\MTP\Genomic_privacy_audit\OPA
-python main.py --rounds 5 --clients 10 --local-epochs 1 --batch-size 16 --lr 0.0005 --lam 128 --t 3 --r 6
+python main.py --rounds 50 --clients 10 --local-epochs 5 --batch-size 16 --lr 0.0005 --lam 128 --t 3 --r 6
 ```
 
 ### Module Invocation from Project Root
 ```powershell
 cd d:\MTP
-python -m Genomic_privacy_audit.OPA.main --rounds 5 --clients 10 --batch-size 16
+python -m Genomic_privacy_audit.OPA.main --rounds 50 --clients 10 --local-epochs 5 --batch-size 16
 ```
 
 ### Command-Line Arguments Reference
 
 | Argument | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--rounds` | `int` | `5` | Number of Federated Learning communication rounds |
+| `--rounds` | `int` | `50` | Number of Federated Learning communication rounds (upgraded to force convergence) |
 | `--clients` | `int` | `10` | Number of simulated FL clients ($m$) |
-| `--local-epochs` | `int` | `1` | Local optimization epochs per client per round |
+| `--local-epochs` | `int` | `5` | Local optimization epochs per client per round (upgraded to force overfitting) |
 | `--batch-size` | `int` | `16` | Mini-batch size for client DataLoaders |
 | `--lr` | `float` | `0.0005` | Learning rate for Adam optimizer |
 | `--lam` | `int` | `128` | Security parameter / PRG seed length ($\lambda$) |

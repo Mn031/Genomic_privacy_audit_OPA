@@ -7,7 +7,9 @@ from .dataset import (
     DNATokenizer,
     CanaryMetadata,
     GenomicDataset,
-    sample_zero_order_dna,
+    load_gue_dataset_sequences,
+    process_sequence_to_length,
+    get_huggingface_token,
     generate_canary_sequences,
     create_genomic_corpus,
     get_genomic_dataloaders,
@@ -42,7 +44,9 @@ __all__ = [
     "DNATokenizer",
     "CanaryMetadata",
     "GenomicDataset",
-    "sample_zero_order_dna",
+    "load_gue_dataset_sequences",
+    "process_sequence_to_length",
+    "get_huggingface_token",
     "generate_canary_sequences",
     "create_genomic_corpus",
     "get_genomic_dataloaders",
@@ -67,4 +71,3 @@ __all__ = [
     "OPAFedAvg",
     "OPAStrategy",
 ]
-
